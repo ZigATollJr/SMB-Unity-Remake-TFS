@@ -65,6 +65,7 @@ public class Player_Controller : MonoBehaviour
 
     void Update()
     {
+        if (anim.GetBool("isAttack")) anim.SetBool("isAttack", false);
         if (Input.GetButtonDown("Jump")) jump = true;
         if (Input.GetButtonUp("Jump")) isJumping = false;
         if (Input.GetKey(KeyCode.LeftShift)) isRunning = true;
@@ -73,6 +74,7 @@ public class Player_Controller : MonoBehaviour
             xVelLimit = 5.72f;
             isRunning = false;
         }
+        if (Input.GetKey(KeyCode.LeftControl)) anim.SetBool("isAttack", true);
         switch (Input.GetAxisRaw("Horizontal"))
         {
             case -1:
@@ -100,6 +102,7 @@ public class Player_Controller : MonoBehaviour
             sr.flipX = (xDir == -1);
             flipDir = xDir;
             anim.SetBool("isSkidding", false);
+            anim.SetBool("isAirAttack", false);
             if (xInput != 0 && xInput == xVelDir)
             {
                 
@@ -185,6 +188,7 @@ public class Player_Controller : MonoBehaviour
         {
             // MOVEMENT STUFF
             // Air acceleration (horizontal movement)
+            if (Input.GetKey("i") == true) anim.SetBool("isAirAttack", true);
             if (xDir == flipDir)
             {
                 if (MathF.Abs(xVel) < 5.86f) xVel += (8.35f / 50f) * xInput;
