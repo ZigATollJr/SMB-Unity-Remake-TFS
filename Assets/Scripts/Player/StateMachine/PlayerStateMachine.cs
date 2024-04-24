@@ -1,50 +1,53 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using Unity.VisualScripting;
-using UnityEditor.Build;
 using UnityEngine;
-using UnityEngine.UIElements;
+using static UnityEditor.VersionControl.Asset;
 
-[RequireComponent(typeof(Rigidbody2D),typeof(SpriteRenderer))]
-public class Player_Controller : MonoBehaviour
+public class PlayerStateMachine : MonoBehaviour
 {
     Rigidbody2D rb;
-    SpriteRenderer sr;
+    public Rigidbody2D Rb => rb;
     Animator anim;
-    [SerializeField] private float speed = 7.0f;
-    [SerializeField] private float jumpForce = 3f;
+    public Animator Anim => anim;
+    public SpriteRenderer sr;
+    public SpriteRenderer Sr => sr;
+
+    PlayerBaseState currentState;
+    PlayerStateFactory states;
+
     [SerializeField] private bool testMode = false;
-    
-    [SerializeField] private float jumpStartTime = 1f; 
-    private float jumpTime = 0f;
+
     [SerializeField] private Transform GroundCheck;
     [SerializeField] private LayerMask isGroundLayer;
     [SerializeField] private float groundCheckRadius = 0.02f;
-    [SerializeField] private float jumpHeight = 4f;
-    [SerializeField] private float timeToJumpApex = 0.55f;
 
-    [SerializeField] private float tempFloat = 0f;
-
-    [SerializeField] public bool playerLarge = false;
-    [SerializeField] private bool isGrounded = false;
-    [SerializeField] private bool isJumping = false;
+    [SerializeField] public bool isLarge = false;
+    [SerializeField] public bool isGrounded = false;
+    [SerializeField] public bool isJumping = false;
+    [SerializeField] public bool isSkidding = false;
     [SerializeField] private bool jump = false;
-    [SerializeField] float xVel = 0f;
+    [SerializeField] bool isRunning;
+    [SerializeField] public bool changeSize = false;
+
+    [SerializeField] public float xVel = 0f;
     [SerializeField] float xVelLimit = 5.72f;
     [SerializeField] float xVelInitialJump = 0f;
     [SerializeField] float yVel = 0f;
     [SerializeField] float yVelLimit = 0f;
     [SerializeField] sbyte xInput = 0;
     [SerializeField] sbyte xDir = 0;
-    [SerializeField] sbyte flipDir = 0;
-    [SerializeField] float jumpGrav = 0f;
-    [SerializeField] float grav = 98.4375f;
-    [SerializeField] bool isRunning;
-
-    // Animator bools
-         
-
+    [SerializeField] public sbyte flipDir = 0;
+    float grav = 98.4375f;
+    float jumpGrav = 0f;
+    public PlayerBaseState GetCurrentState()
+    {
+        return currentState;
+    }
+    public void SetCurrentState(PlayerBaseState value)
+    {
+        currentState = value;
+    }
 
     void Start()
     {
@@ -56,12 +59,10 @@ public class Player_Controller : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         sr = GetComponent<SpriteRenderer>();
         anim = GetComponent<Animator>();
-        if (speed <= 0)
-        {
 
-            speed = 7.0f;
-            if (testMode) Debug.Log("Mario speed too low! Set to default of 7.0f");
-        }
+        states = new PlayerStateFactory(this);
+        currentState = states.Idle();
+        currentState.EnterState();
     }
 
     void Update()
@@ -85,6 +86,8 @@ public class Player_Controller : MonoBehaviour
                 xInput = 1;
                 break;
         }
+        currentState.UpdateState();
+
     }
 
     void FixedUpdate()
@@ -92,21 +95,23 @@ public class Player_Controller : MonoBehaviour
         isGrounded = Physics2D.OverlapCircle(GroundCheck.position, groundCheckRadius, isGroundLayer);
         sbyte xVelDir = (sbyte)MathF.Sign(xVel);
         if (xVelDir == 0) xVelDir = xDir;
-        Debug.Log(xVelDir + " guh " + MathF.Sign(xVel));
+        // Player Movement Controller
         if (isGrounded)
         {
-            // MOVEMENT STUFF
             // Min Walk Vel
             yVel = 0;
-            sr.flipX = (xDir == -1);
-            flipDir = xDir;
+            if (xDir != 0)
+            {
+                sr.flipX = (xDir == -1);
+                flipDir = xDir;
+            }
             anim.SetBool("isSkidding", false);
+            // Player is moving forward
             if (xInput != 0 && xInput == xVelDir)
             {
-                
-                
-                
-                if (xVel == 0f) {
+                isSkidding = false;
+                if (xVel == 0f)
+                {
                     Debug.Log("We started to walk");
                     xVel += 0.278f * xDir;
                 }
@@ -117,7 +122,7 @@ public class Player_Controller : MonoBehaviour
                     xVel += (13.4f / 50f) * xVelDir;
                     xVelLimit = 9.61f;
                 }
-                    // Walking acceleration
+                // Walking acceleration
                 else
                 {
                     Debug.Log("Should be walking");
@@ -126,27 +131,33 @@ public class Player_Controller : MonoBehaviour
 
                 }
             }
-            // Slowing down
+            // Player is slowing down/skidding
             else
             {
                 if (MathF.Abs(xVel) > 0f)
                 {
                     Debug.Log("SKIDDING");
-                    // Skidding / release decel
+                    // Skidding decel
                     if (flipDir != MathF.Sign(xVel))
                     {
                         if (xDir != 0) xVel -= (22.85f / 50f) * xVelDir;
-                        anim.SetBool("isSkidding", true);
+                        isSkidding = true;
                     }
                     // Release decel
-                    else xVel -= (8.35f / 50f) * xVelDir;
-
+                    else
+                    {
+                        xVel -= (8.35f / 50f) * xVelDir;
+                        
+                    }
                     // xVel -= (xVelDir * (flipDir != MathF.Sign(xVel) ? 22.85f : 8.35f) / 50f);
 
                     // Slowest skid (turnaround speed)
-                    if (MathF.Abs(xVel) < 2.1f) xVel = 0f;
+                    if (MathF.Abs(xVel) < 2.1f)
+                    {
+                        xVel = 0f;
+                        isSkidding = false;
+                    }
                 }
-                
             }
             anim.SetBool("isJumping", false);
             if (jump)
@@ -170,16 +181,13 @@ public class Player_Controller : MonoBehaviour
                     grav = 126.54f;
                 }
                 xVelInitialJump = xVel;
-                anim.SetBool("isSkidding", false);
-                anim.SetBool("isJumping", true);
+                isSkidding = false;
                 jump = false;
                 isJumping = true;
             }
             // ANIMATOR STUFF
+
             
-            if (Mathf.Abs(xVel) > 6f) anim.speed = 2;
-            else if (Mathf.Abs(xVel) > 4f) anim.speed = 1.4f;
-            else anim.speed = 1;
         }
         // Else is NOT grounded (in the air)
         else
@@ -196,11 +204,12 @@ public class Player_Controller : MonoBehaviour
             {
                 if (xVel >= 5.86f) xVel -= (13.4f / 50f) * xVelDir;
                 else if (xVelInitialJump >= 6.8f) xVel += (12.52f / 50f) * xInput;
-                else xVel += (8.349f/50f) * xInput;
+                else xVel += (8.349f / 50f) * xInput;
             }
             Debug.Log("GRAVITY");
             // Gravity... is a harness.
-            if (isJumping) {
+            if (isJumping)
+            {
                 yVel -= jumpGrav / 50f;
                 if (yVel < 0) isJumping = false;
             }
@@ -215,6 +224,7 @@ public class Player_Controller : MonoBehaviour
 
         anim.SetFloat("xVel", Mathf.Abs(xVel));
         xInput = 0;
-        rb.velocity = new Vector2 (xVel, yVel);
+        rb.velocity = new Vector2(xVel, yVel);
+        currentState.FixedUpdateState();
     }
 }
